@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Socket 文件管理</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #fileList { border: 1px solid #ccc; padding: 10px; width: 400px; height: 300px; overflow-y: auto; }
+        li { cursor: pointer; }
+        li.directory { font-weight: bold; }
+        button { margin: 5px; }
+    </style>
+</head>
+<body>
+<h2>Socket 文件管理系统</h2>
+<div>
+    <button id="backBtn">返回上级</button>
+    <button id="createDirBtn">创建目录</button>
+    <input type="file" id="uploadFile">
+    <button id="uploadBtn">上传文件</button>
+</div>
+<ul id="fileList"></ul>
+
+<script>
+    let ws;
+    let currentDir = "root";
+    let pathStack = [];
+
+    function connect() {
+        ws = new WebSocket("ws://localhost:9000");
+
+        ws.onopen = () => {
+            console.log("连接成功");
+            loadFileList(currentDir);
+        };
+
+        ws.onmessage = (event) => {
+            const msg = event.data;
+            if (msg.startsWith("LIST_RESULT|")) {
+                updateFileList(msg);
+            } else if (msg === "CREATE_DIR_SUCCESS") {
+                alert("创建目录成功");
+                loadFileList(currentDir);
+            } else if (msg === "UPLOAD_SUCCESS") {
+                alert("文件上传成功");
+                loadFileList(currentDir);
+            } else if (msg.startsWith("ERROR|")) {
+                alert(msg);
+            } else {
+                console.log("未知消息:", msg);
+            }
+        };
+
+        ws.onclose = () => console.log("连接关闭");
+        ws.onerror = (e) => console.error("连接错误", e);
+    }
+
+    function loadFileList(dir) {
+        ws.send("LIST|" + dir);
+    }
+
+    function updateFileList(msg) {
+        const fileList = document.getElementById("fileList");
+        fileList.innerHTML = "";
+        const parts = msg.split("|");
+        const dirs = parts[1] ? parts[1].split(",").filter(d => d) : [];
+        const files = parts[2] ? parts[2].split(",").filter(f => f) : [];
+
+        dirs.forEach(d => {
+            const li = document.createElement("li");
+            li.textContent = d;
+            li.classList.add("directory");
+            li.onclick = () => {
+                pathStack.push(currentDir);
+                currentDir = currentDir + "/" + d;
+                loadFileList(currentDir);
+            };
+            fileList.appendChild(li);
+        });
+
+        files.forEach(f => {
+            const li = document.createElement("li");
+            li.textContent = f;
+            li.onclick = () => downloadFile(currentDir + "/" + f);
+            fileList.appendChild(li);
+        });
+    }
+
+    document.getElementById("backBtn").onclick = () => {
+        if (pathStack.length > 0) {
+            currentDir = pathStack.pop();
+            loadFileList(currentDir);
+        }
+    };
+
+    document.getElementById("createDirBtn").onclick = () => {
+        const dirName = prompt("输入目录名:");
+        if (dirName) {
+            ws.send("CREATE_DIR|" + currentDir + "/" + dirName);
+        }
+    };
+
+    document.getElementById("uploadBtn").onclick = () => {
+        const fileInput = document.getElementById("uploadFile");
+        if (fileInput.files.length === 0) {
+            alert("请选择文件");
+            return;
+        }
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            // 发送二进制数据
+            ws.send("UPLOAD|" + currentDir + "|" + file.name);
+            ws.send(e.target.result); // 简单处理，可改成二进制发送
+        };
+        reader.readAsArrayBuffer(file);
+    };
+
+    function downloadFile(filePath) {
+        ws.send("DOWNLOAD|" + filePath);
+        alert("开始下载文件：" + filePath);
+    }
+
+    connect();
+</script>
+</body>
+</html>
