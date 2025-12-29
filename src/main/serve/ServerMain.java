@@ -1,21 +1,23 @@
 package main.serve;
 
-import main.common.Config;
-
+import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 
 public class ServerMain {
+    public static void main(String[] args) {
+        int port = 9000;
+        String baseDir = "D:/ServerFiles"; // 上传文件存放的磁盘目录
+        System.out.println("Server starting on port " + port);
 
-    public static void main(String[] args) throws Exception {
-        int port = Integer.parseInt(Config.get("server.port"));
-        ServerSocket serverSocket = new ServerSocket(port);
-
-        System.out.println("Socket File Server started on port " + port);
-
-        while (true) {
-            Socket socket = serverSocket.accept(); // 阻塞
-            new Thread(new ClientHandler(socket)).start();
+        try (ServerSocket serverSocket = new ServerSocket(port)) {
+            while (true) {
+                Socket clientSocket = serverSocket.accept();
+                System.out.println("New client connected: " + clientSocket.getInetAddress());
+                new Thread(new ClientHandler(clientSocket, baseDir)).start();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }

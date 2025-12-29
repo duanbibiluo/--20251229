@@ -1,38 +1,22 @@
 package main.serve;
 
-import java.io.*;
+import java.io.IOException;
 import java.net.Socket;
 
 public class ClientHandler implements Runnable {
-
     private final Socket socket;
+    private final FileService fileService;
 
-    public ClientHandler(Socket socket) {
+    public ClientHandler(Socket socket, String baseDir) {
         this.socket = socket;
+        this.fileService = new FileService(baseDir);
     }
 
     @Override
     public void run() {
-        try (
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(socket.getInputStream()));
-                PrintWriter writer = new PrintWriter(
-                        socket.getOutputStream(), true)
-        ) {
-            String commandLine = reader.readLine(); // COMMAND: XXX
-            if (commandLine == null) return;
-
-            if (commandLine.contains("LS")) {
-                FileService.handleLs(writer);
-            } else if (commandLine.contains("PUT")) {
-                FileService.handlePut(reader, writer, socket);
-            } else if (commandLine.contains("GET")) {
-                FileService.handleGet(reader, writer, socket);
-            } else {
-                writer.println("STATUS: 400");
-                writer.println("MESSAGE: Unknown command");
-            }
-        } catch (Exception e) {
+        try {
+            fileService.handleClient(socket);
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
